@@ -9,17 +9,26 @@ const generatePurchaseReceivedNumber = () => {
 };
 
 const purchaseReceives = async (req, res, next) => {
-  const { purchase_order_id, item_ids, items, received_date, description } = req.body;
+  const { purchase_order_id, vendor_ids, items, received_date, description } = req.body;
 
   try {
     const client = await pool.connect();
 
-    // Check if the purchase_order_id exists
-    const checkPurchaseOrderQuery = 'SELECT id FROM purchase_order WHERE id = $1';
-    const checkPurchaseOrderResult = await pool.query(checkPurchaseOrderQuery, [purchase_order_id]);
+    // Check if the purchase_order_id exists and its status
+    const checkPurchaseOrderQuery = 'SELECT id, status FROM purchase_order WHERE id = $1';
+    const checkPurchaseOrderResult = await client.query(checkPurchaseOrderQuery, [purchase_order_id]);
 
     if (checkPurchaseOrderResult.rowCount === 0) {
+      client.release();
       return responseSender(res, 422, false, "Invalid purchase_order_id. The purchase order does not exist.");
+    }
+
+    const purchaseOrderStatus = checkPurchaseOrderResult.rows[0].status;
+
+    // If the purchase order is fully delivered, prevent creating a new purchase receive
+    if (purchaseOrderStatus === 'FULLY DELIVERED') {
+      client.release();
+      return responseSender(res, 422, false, "Cannot create a purchase receive. The purchase order has already been fully delivered.");
     }
 
     // Generate a unique purchase_received_number
@@ -32,16 +41,15 @@ const purchaseReceives = async (req, res, next) => {
       VALUES ($1, $2, $3, $4)
       RETURNING id, purchase_received_number
     `;
-    const result = await pool.query(insertReceiveQuery, [purchase_order_id, purchase_received_number, received_date, description]);
+    const result = await client.query(insertReceiveQuery, [purchase_order_id, purchase_received_number, received_date, description]);
     const purchaseReceiveId = result.rows[0].id;
     const receivedNumber = result.rows[0].purchase_received_number;
 
     const insertedItems = [];
     let hasRemainingItems = false;
 
-    for (let i = 0; i < item_ids.length; i++) {
-      const item_id = item_ids[i];
-      const { vendor_ids, quantity_received, rate } = items[i];
+    for (const item of items) {
+      const { item_id, quantity_received, rate } = item;
 
       // Check if the item_id exists
       const checkItemQuery = `
@@ -49,9 +57,10 @@ const purchaseReceives = async (req, res, next) => {
         FROM purchase_items
         WHERE id = $1
       `;
-      const checkItemResult = await pool.query(checkItemQuery, [item_id]);
+      const checkItemResult = await client.query(checkItemQuery, [item_id]);
 
       if (checkItemResult.rowCount === 0) {
+        client.release();
         return responseSender(res, 422, false, `Invalid item_id ${item_id}. This item does not exist in the purchase_items table.`);
       }
 
@@ -61,6 +70,7 @@ const purchaseReceives = async (req, res, next) => {
       const remaining_quantity = total_quantity - quantity_received;
 
       if (quantity_received > required_quantity) {
+        client.release();
         return responseSender(res, 422, false, `Received quantity cannot be greater than required quantity ${required_quantity} for item ${item_id}.`);
       }
 
@@ -70,20 +80,21 @@ const purchaseReceives = async (req, res, next) => {
           SELECT id FROM purchase_order_preferred_vendors
           WHERE purchase_order_id = $1 AND vendor_id = $2
         `;
-        const checkVendorResult = await pool.query(checkVendorQuery, [purchase_order_id, vendor_id]);
+        const checkVendorResult = await client.query(checkVendorQuery, [purchase_order_id, vendor_id]);
 
         if (checkVendorResult.rowCount === 0) {
+          client.release();
           return responseSender(res, 422, false, `Invalid vendor_id ${vendor_id} for the provided purchase_order_id.`);
         }
 
-        // Insert item-specific record
+        // Insert item-specific record into purchase_receive_items
         const insertItemQuery = `
           INSERT INTO purchase_receive_items 
           (purchase_receive_id, vendor_id, item_id, total_quantity, quantity_received, rate)
           VALUES ($1, $2, $3, $4, $5, $6)
           RETURNING *
         `;
-        const itemResult = await pool.query(insertItemQuery, [
+        const itemResult = await client.query(insertItemQuery, [
           purchaseReceiveId,
           vendor_id,
           item_id,
@@ -106,7 +117,7 @@ const purchaseReceives = async (req, res, next) => {
             required_quantity = $2
         WHERE id = $3
       `;
-      await pool.query(updateItemQuery, [
+      await client.query(updateItemQuery, [
         quantity_received,
         remaining_quantity,
         item_id
@@ -120,7 +131,9 @@ const purchaseReceives = async (req, res, next) => {
       WHERE id = $2
     `;
     const newStatus = hasRemainingItems ? 'PARTIALLY RECEIVED' : 'FULLY DELIVERED';
-    await pool.query(updateStatusQuery, [newStatus, purchase_order_id]);
+    await client.query(updateStatusQuery, [newStatus, purchase_order_id]);
+
+    client.release();
 
     return responseSender(res, 200, true, "Purchase receive created successfully", {
       purchase_received_number: receivedNumber,
@@ -369,7 +382,8 @@ const getPurchaseReceives = async (req, res, next) => {
 
     // Fetch item details for each purchase receive
     const itemsQuery = `
-      SELECT * FROM purchase_receive_items
+      SELECT *
+      FROM purchase_receive_items
       WHERE purchase_receive_id = ANY($1::uuid[])
     `;
     const itemsResult = await client.query(itemsQuery, [purchaseReceiveIds]);
@@ -393,13 +407,17 @@ const getPurchaseReceives = async (req, res, next) => {
       return acc;
     }, {});
 
-    // Fetch item details for each item
     const itemIds = itemsResult.rows.map(item => item.item_id);
     const itemsQuery2 = `
-      SELECT * FROM item
+      SELECT item_id
+      FROM purchase_items
       WHERE id = ANY($1::uuid[])
     `;
+
+    console.log("itemIds", itemIds);
+
     const itemsResult2 = await client.query(itemsQuery2, [itemIds]);
+
     const itemsByItemId = itemsResult2.rows.reduce((acc, item) => {
       acc[item.id] = item;
       return acc;
@@ -411,6 +429,8 @@ const getPurchaseReceives = async (req, res, next) => {
       receive.items.forEach(item => {
         item.vendor_details = vendorsById[item.vendor_id] || {};
         item.item_details = itemsByItemId[item.item_id] || {};
+        // Log item details assignment
+        console.log("Assigned item details:", item.item_details);
       });
     });
 
@@ -432,7 +452,7 @@ const getPurchaseReceives = async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-};
+}; 
 
 const getPurchaseReceiveDetails = async (req, res, next) => {
   const purchaseReceiveId = req.query.purchase_receive_id;
@@ -463,9 +483,8 @@ const getPurchaseReceiveDetails = async (req, res, next) => {
     const itemsResult = await client.query(itemsQuery, [purchaseReceiveId]);
     const items = itemsResult.rows;
 
-    // Fetch vendor details and item details in batch
-    const vendorIds = items.map(item => item.vendor_id);
-    const itemIds = items.map(item => item.item_id);
+    // Fetch unique vendor IDs
+    const vendorIds = [...new Set(items.map(item => item.vendor_id))];
 
     // Fetch vendor details
     const vendorsQuery = `
@@ -477,24 +496,15 @@ const getPurchaseReceiveDetails = async (req, res, next) => {
       return acc;
     }, {});
 
-    // Fetch item details
-    const itemsQuery2 = `
-      SELECT * FROM item WHERE id = ANY($1::uuid[]);
-    `;
-    const itemsResult2 = await client.query(itemsQuery2, [itemIds]);
-    const itemsById = itemsResult2.rows.reduce((acc, item) => {
-      acc[item.id] = item;
-      return acc;
-    }, {});
+    // Group items by vendor_id and attach vendor details
+    const groupedItems = vendorIds.map(vendorId => ({
+      vendor_id: vendorId,
+      vendor_details: vendorsById[vendorId] || {},
+      items: items.filter(item => item.vendor_id === vendorId)
+    }));
 
-    // Attach details to each item
-    items.forEach(item => {
-      item.vendor_details = vendorsById[item.vendor_id] || {};
-      item.item_details = itemsById[item.item_id] || {};
-    });
-
-    // Attach items to the purchase receive
-    purchaseReceive.items = items;
+    // Attach grouped items to the purchase receive
+    purchaseReceive.items = groupedItems;
 
     client.release();
 
@@ -504,6 +514,7 @@ const getPurchaseReceiveDetails = async (req, res, next) => {
     next(error);
   }
 };
+
 
 ///////////////////////////////////
 
@@ -563,7 +574,6 @@ const getVendorsAndItemsByPurchaseOrderId = async (req, res, next) => {
   }
 };
 
-
 const getPurchaseItemIdsByOrderIdAndVendorId = async (req, res, next) => {
   const { purchase_order_id, vendor_id } = req.query;
 
@@ -596,9 +606,12 @@ const getPurchaseItemIdsByOrderIdAndVendorId = async (req, res, next) => {
 
     // Fetch all records from purchase_items for the obtained purchase_item_ids
     const itemsQuery = `
-      SELECT *
-      FROM purchase_items
-      WHERE id = ANY($1::uuid[]);
+      SELECT 
+          id, available_stock, required_quantity, price, preffered_vendor_ids
+      FROM 
+          purchase_items
+      WHERE 
+          id = ANY($1::uuid[]);
     `;
 
     const itemsResult = await client.query(itemsQuery, [purchaseItemIds]);
@@ -609,9 +622,15 @@ const getPurchaseItemIdsByOrderIdAndVendorId = async (req, res, next) => {
       return responseSender(res, 404, false, "No purchase items details found for the provided purchase_item_ids");
     }
 
+    // Add vendor_id to each item
+    const itemsWithVendorId = itemsResult.rows.map(item => ({
+      ...item,
+      vendor_id: vendor_id  // Attach vendor_id to each item
+    }));
+
     return responseSender(res, 200, true, "Purchase item IDs and details fetched successfully", {
       purchase_item_ids: purchaseItemIds,
-      items: itemsResult.rows
+      items: itemsWithVendorId
     });
   } catch (error) {
     next(error);

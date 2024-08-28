@@ -252,9 +252,9 @@ CREATE TABLE IF NOT EXISTS purchase_receive_items (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   purchase_receive_id UUID NOT NULL REFERENCES purchase_receives(id),
   vendor_id UUID NOT NULL REFERENCES vendor(id),
-  item_id UUID NOT NULL,
+  item_id UUID NOT NULL REFERENCES purchase_items(id),
   total_quantity INTEGER NOT NULL,
   quantity_received INTEGER NOT NULL,
   rate DECIMAL(10, 2),
   total_cost DECIMAL(10, 2) GENERATED ALWAYS AS (quantity_received * rate) STORED
-); 
+);
