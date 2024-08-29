@@ -222,30 +222,16 @@ CREATE TABLE IF NOT EXISTS purchase_order_preferred_vendors (
     purchase_item_id UUID NOT NULL,
     vendor_id UUID NOT NULL,
     UNIQUE (purchase_order_id, purchase_item_id, vendor_id)
-);
-
--- CREATE TABLE IF NOT EXISTS purchase_receives (
---   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
---   purchase_order_id UUID NOT NULL REFERENCES purchase_order(id),
---   purchase_received_number VARCHAR(255) UNIQUE,
---   vendor_id UUID NOT NULL REFERENCES vendor(id),
---   item_id UUID NOT NULL,
---   total_quantity INTEGER NOT NULL,
---   quantity_received INTEGER NOT NULL,
---   remaining_quantity INTEGER GENERATED ALWAYS AS (total_quantity - quantity_received) STORED,
---   rate DECIMAL(10, 2),
---   total_cost DECIMAL(10, 2) GENERATED ALWAYS AS (quantity_received * rate) STORED,
---   remaining_item INTEGER,
---   received_date DATE NOT NULL,
---   description TEXT
--- ); 
+); 
 
 CREATE TABLE IF NOT EXISTS purchase_receives (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   purchase_order_id UUID NOT NULL REFERENCES purchase_order(id),
   purchase_received_number VARCHAR(255) UNIQUE,
   received_date DATE NOT NULL,
-  description TEXT
+  description TEXT,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS purchase_receive_items (
@@ -255,6 +241,9 @@ CREATE TABLE IF NOT EXISTS purchase_receive_items (
   item_id UUID NOT NULL REFERENCES purchase_items(id),
   total_quantity INTEGER NOT NULL,
   quantity_received INTEGER NOT NULL,
+  remaining_quantity TEXT NOT NULL,
   rate DECIMAL(10, 2),
-  total_cost DECIMAL(10, 2) GENERATED ALWAYS AS (quantity_received * rate) STORED
+  total_cost DECIMAL(10, 2) GENERATED ALWAYS AS (quantity_received * rate) STORED,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
 );

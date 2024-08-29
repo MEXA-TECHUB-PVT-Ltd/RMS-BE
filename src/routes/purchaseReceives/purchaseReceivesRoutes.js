@@ -1,6 +1,7 @@
 const { Router } = require("express");
 const {
     purchaseReceives,
+    updatePurchaseReceive,
     cancelPurchaseOrder,
     getPurchaseReceives,
     getPurchaseReceiveDetails,
@@ -12,6 +13,7 @@ const {
 const router = Router();
 
 router.route("/create").post(purchaseReceives);
+router.route("/update").put(updatePurchaseReceive);  
 router.route("/cancel").delete(cancelPurchaseOrder);
 router.route("/get/all").get(getPurchaseReceives);
 router.route("/specific/get").get(getPurchaseReceiveDetails);
