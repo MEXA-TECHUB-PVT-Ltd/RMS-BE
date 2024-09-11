@@ -232,6 +232,7 @@ CREATE TABLE IF NOT EXISTS purchase_receives (
   purchase_received_number VARCHAR(255) UNIQUE,
   received_date DATE NOT NULL,
   description TEXT,
+  pr_invoice BOOLEAN DEFAULT false,
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -252,14 +253,30 @@ CREATE TABLE IF NOT EXISTS purchase_receive_items (
 
 CREATE TABLE IF NOT EXISTS invoice_tax (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  purchase_receive_id UUID NOT NULL REFERENCES purchase_receives(id),
-  vendor_id UUID NOT NULL REFERENCES vendor(id),
-  item_id UUID NOT NULL REFERENCES purchase_items(id),
-  total_quantity INTEGER NOT NULL,
-  quantity_received INTEGER NOT NULL,
-  remaining_quantity TEXT NOT NULL,
-  rate DECIMAL(10, 2),
-  total_cost DECIMAL(10, 2) GENERATED ALWAYS AS (quantity_received * rate) STORED,
+  tax_value TEXT NOT NULL,
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS invoices (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  total_items INTEGER NOT NULL, -- Total number of items in the invoice
+  bill_date DATE NOT NULL, -- The date when the bill is issued
+  bill_number VARCHAR(255) UNIQUE NOT NULL, -- Auto-generated bill number
+  due_date DATE, -- Optional due date
+  total_price TEXT NOT NULL, -- Total price of the invoice
+  tax_id UUID NOT NULL REFERENCES invoice_tax(id), -- Single tax ID from invoice_tax table
+  payment_term_id UUID NOT NULL REFERENCES payment_term(id), -- Foreign key reference to payment_term table
+  status VARCHAR(50) CHECK (status IN ('Paid', 'Draft', 'Unpaid')) NOT NULL, -- Status of the invoice
+  net_price TEXT NOT NULL, -- net price of the invoice after adding tax
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Junction table to associate multiple purchase_receive_ids with an invoice
+CREATE TABLE IF NOT EXISTS invoice_purchase_receives (
+  invoice_id UUID NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+  purchase_receive_id UUID NOT NULL REFERENCES purchase_receives(id) ON DELETE CASCADE,
+  PRIMARY KEY (invoice_id, purchase_receive_id)
+);
+

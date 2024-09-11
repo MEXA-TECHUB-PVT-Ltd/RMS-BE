@@ -14,6 +14,8 @@ const purchaseOrderRoutes = require("./purchaseOrder/purchaseOrderRoutes");
 const commentsRoutes = require("./PurchaseRequisition/Comments/commentsRoutes");
 const couponRoutes = require("./POS/Coupon/couponRoutes");
 const purchaseReceivesRoutes = require("./purchaseReceives/purchaseReceivesRoutes");
+const TaxRoutes = require("./Invoice/invoiceTax/invoiceTaxRoutes");
+const invoiceRoutes = require("./Invoice/invoiceRoutes");
 
 router.use("/currency", currencyRoutes);
 router.use("/payment-term", paymentTermRoutes);
@@ -29,5 +31,7 @@ router.use("/purchase/order", purchaseOrderRoutes);
 router.use("/comment", commentsRoutes);
 router.use("/coupon", couponRoutes);
 router.use("/purchase/receives", purchaseReceivesRoutes);
+router.use("/tax", TaxRoutes);
+router.use("/invoice", invoiceRoutes);
 
 module.exports = router;
