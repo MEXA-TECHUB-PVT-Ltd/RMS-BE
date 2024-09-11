@@ -148,13 +148,13 @@ CREATE TABLE IF NOT EXISTS coupon(
     updated_at TIMESTAMP DEFAULT NOW() 
 );
 
-CREATE TABLE IF NOT EXISTS ordered_recipies (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    recipe_id UUID REFERENCES recipes(id) NOT NULL,
-    quantity NUMERIC NOT NULL,
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
-);
+-- CREATE TABLE IF NOT EXISTS ordered_recipies (
+--     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+--     recipe_id UUID REFERENCES recipes(id) NOT NULL,
+--     quantity NUMERIC NOT NULL,
+--     created_at TIMESTAMP DEFAULT NOW(),
+--     updated_at TIMESTAMP DEFAULT NOW()
+-- );
 
 CREATE TABLE IF NOT EXISTS ordered_items (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -182,28 +182,38 @@ CREATE TABLE IF NOT EXISTS pos(
     order_status VARCHAR(255) CHECK (order_status IN ('RECEIVED', 'PREPARATION' , 'READY')),
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
+); 
+
+CREATE TABLE IF NOT EXISTS recipes (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    recipe_name VARCHAR(50), 
+    category UUID REFERENCES category(id),
+    difficulty_level VARCHAR(50) CHECK (difficulty_level IN ('HIGH', 'MEDIUM', 'LOW')),
+    added_by VARCHAR(50),
+    price INT,
+    cooking_time TEXT,
+    nutritional_info VARCHAR(100),
+    allergen_info VARCHAR(100),
+    equipment_needed VARCHAR(100),
+    presentation_instructions VARCHAR(100),
+    side_order VARCHAR(100),
+    image VARCHAR(255),
+    preparation_instructions VARCHAR(500),
+    serving_details TEXT,
+    signature BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE TABLE
-    IF NOT EXISTS recipes (
-        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-        recipe_name VARCHAR(50), 
-        category UUID REFERENCES category(id),
-        difficulty_level VARCHAR(50) CHECK (difficulty_level IN ('HIGH', 'MEDIUM', 'LOW')),
-        added_by VARCHAR(50),
-        price INT,
-        cooking_time INT,
-        selected_item UUID REFERENCES item(id),
-        nutritional_info VARCHAR(50),
-        allergen_info VARCHAR(50),
-        presentation_instructions VARCHAR(50),
-        equipment_needed VARCHAR(50),
-        side_order VARCHAR(50),
-        image VARCHAR(50),
-        preparation_instructions VARCHAR(50),
-        created_at TIMESTAMP DEFAULT NOW(),
-        updated_at TIMESTAMP DEFAULT NOW()
-    );
+CREATE TABLE IF NOT EXISTS recipe_items (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    recipe_id UUID REFERENCES recipes(id) ON DELETE CASCADE,
+    item_id UUID REFERENCES item(id),
+    quantity TEXT,
+    measuring_unit VARCHAR(20),
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
 
  CREATE TABLE 
     IF NOT EXISTS purchase_order (
