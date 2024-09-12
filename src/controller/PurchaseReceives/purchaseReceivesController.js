@@ -535,7 +535,7 @@ const getPurchaseReceives = async (req, res, next) => {
     // Construct the base query
     let countQuery = 'SELECT COUNT(*) FROM purchase_receives';
     let purchaseReceivesQuery = `
-      SELECT id, purchase_order_id, purchase_received_number, received_date, description
+      SELECT id, purchase_order_id, purchase_received_number, received_date, pr_invoice, description
       FROM purchase_receives
     `;
 
@@ -632,7 +632,6 @@ const getPurchaseReceives = async (req, res, next) => {
     next(error);
   }
 };
-
 
 const getPurchaseReceiveDetails = async (req, res, next) => {
   const { id } = req.query; // Get purchase_receive_id from the query parameters
