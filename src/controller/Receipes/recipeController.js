@@ -35,8 +35,8 @@ const createRecipe = async (req, res, next) => {
         !items ||
         !items.length ||
         !serving_details ||
-        (signature === undefined || signature === null) ||
-        !image
+        (signature === undefined || signature === null)
+        // !image
     ) {
         return responseSender(res, 422, false, "Invalid data. Missing attributes");
     }
@@ -232,6 +232,12 @@ const recipesList = async (req, res, next) => {
             fetchQuery += whereClause;
         }
 
+        // Add ordering to fetchQuery
+        fetchQuery += `
+            ORDER BY r.created_at DESC
+            LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}
+        `;
+
         // Execute count query to get total items
         const countResult = await pool.query(countQuery, queryParams);
         const totalItems = Number.parseInt(countResult.rows[0].count);
@@ -239,8 +245,7 @@ const recipesList = async (req, res, next) => {
         // Calculate offset for pagination
         const offset = (currentPage - 1) * perPage;
 
-        // Add limit and offset to fetchQuery for pagination
-        fetchQuery += ` LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}`;
+        // Execute fetch query with limit and offset for pagination
         const result = await pool.query(fetchQuery, [...queryParams, perPage, offset]);
 
         // Format the results to group items by recipe
@@ -326,6 +331,7 @@ const specificRecipe = async (req, res, next) => {
                 ri.quantity,
                 ri.measuring_unit,
                 i.name AS item_name,
+                i.type AS type,
                 i.image AS item_image,
                 i.description AS item_description
             FROM recipes r
@@ -379,6 +385,7 @@ const specificRecipe = async (req, res, next) => {
                     image: row.item_image,
                     description: row.item_description,
                     quantity: row.quantity,
+                    type:row.type,
                     measuring_unit: row.measuring_unit
                 });
             }

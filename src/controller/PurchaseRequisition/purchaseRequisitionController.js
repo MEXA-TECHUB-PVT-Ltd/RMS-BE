@@ -155,7 +155,9 @@ const getPurchaseRequisition = async (req, res, next) => {
                           'id', v.id, 
                           'vendor_display_name', v.vendor_display_name,
                           'vendor_email', v.email,
-                          'vendor_phone_no', v.phone_no
+                          'vendor_phone_no', v.phone_no,
+                           'vendor_first_name', v.first_name,
+                            'vendor_last_name', v.last_name
                       )
                   )
                   FROM vendor v 
