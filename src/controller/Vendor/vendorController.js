@@ -486,12 +486,12 @@ const deleteVendor = async (req, res, next) => {
       return responseSender(res, 404, false, "Vendor Not Found");
     }
 
-    if (rows[0].document.public_id) {
-      await deleteCloudinaryFile(rows[0].document.public_id);
-    }
+    // if (rows[0].document.public_id) {
+    //   await deleteCloudinaryFile(rows[0].document.public_id);
+    // }
 
     return responseSender(res, 200, true, "Vendor Deleted", rows[0]);
-  } catch {
+  } catch (error) {
     next(error);
   }
 };

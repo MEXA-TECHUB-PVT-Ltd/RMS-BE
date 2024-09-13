@@ -449,10 +449,69 @@ const deleteItem = async (req, res, next) => {
     }
 }
 
+const getVendorsByItem = async (req, res, next) => {
+    const itemId = req.query.id;
+
+    if (!itemId) {
+        return responseSender(res, 400, false, "Item ID is required");
+    }
+
+    try {
+        // SQL query to fetch vendor details based on the item ID
+        const vendorQuery = `
+            SELECT 
+                v.id,
+                v.v_type,
+                v.provider_type,
+                v.first_name,
+                v.last_name,
+                v.company_name,
+                v.vendor_display_name,
+                v.email,
+                v.phone_no,
+                v.work_no,
+                v.country,
+                v.address,
+                v.city,
+                v.state,
+                v.zip_code,
+                v.fax_number,
+                v.shipping_address,
+                v.currency_id,
+                v.payment_term_id,
+                v.document,
+                v.cnic_front_img,
+                v.cnic_back_img,
+                v.contact_person,
+                v.po_sending_status,
+                v.created_at,
+                v.updated_at
+            FROM 
+                item_preferred_vendor ipv
+            INNER JOIN 
+                vendor v ON ipv.vendor_id = v.id
+            WHERE 
+                ipv.item_id = $1;
+        `;
+
+        const { rows } = await pool.query(vendorQuery, [itemId]);
+
+        if (rows.length === 0) {
+            return responseSender(res, 404, false, "No vendors found for this item");
+        }
+
+        return responseSender(res, 200, true, "Vendors fetched successfully", rows);
+    } catch (error) {
+        console.error("Error fetching vendors by item:", error);
+        return responseSender(res, 500, false, "Internal server error");
+    }
+};
+
 module.exports = {
     createItem,
     itemList,
     specifiItem,
     updateItem,
-    deleteItem
+    deleteItem,
+    getVendorsByItem
 };

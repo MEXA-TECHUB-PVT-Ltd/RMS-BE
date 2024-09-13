@@ -64,9 +64,9 @@ const vendorSchema = {
         "string.guid": "payment_term_id must be a valid UUID",
       }),
     contact_person: Joi.string().allow(null, ""),
-    document: Joi.object().allow(null, ""),
-    cnic_front_img: Joi.object().allow(null, ""),
-    cnic_back_img: Joi.object().allow(null, ""),
+    document: Joi.object().allow(null, {}).optional(),
+    cnic_front_img: Joi.object().allow(null, {}).optional(),
+    cnic_back_img: Joi.object().allow(null, {}).optional(),
   }),
 };
 

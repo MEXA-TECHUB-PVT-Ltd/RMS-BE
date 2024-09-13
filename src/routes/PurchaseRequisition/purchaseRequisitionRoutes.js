@@ -5,6 +5,7 @@ const {
   deletePurchaseRequisition,
   getAllPurchaseRequisition,
   updatePurchaseRequisition,
+  converToPO
 } = require("../../controller/PurchaseRequisition/purchaseRequisitionController");
 const upload = require("../../middleware/multer");
 const {
@@ -25,5 +26,6 @@ router.route("/").get(getAllPurchaseRequisition);
 router.route("/:id").get(getPurchaseRequisition);
 router.route("/:id").put(upload.single("document"), updatePurchaseRequisition);
 router.route("/:id").delete(deletePurchaseRequisition);
+router.route("/convert/to/PO").put(converToPO);
 
 module.exports = router;
