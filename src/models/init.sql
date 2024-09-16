@@ -116,7 +116,8 @@ CREATE TABLE IF NOT EXISTS purchase_requisition (
     shipment_preferences VARCHAR(255) DEFAULT NULL,
     document JSONB DEFAULT NULL,
     delivery_address VARCHAR(255) NOT NULL,
-    purchase_item_ids TEXT [] NOT NULL,
+    po_status BOOLEAN DEFAULT FALSE,
+    purchase_item_ids TEXT [] NOT NULL, 
     total_amount VARCHAR(255) NOT NULL,
     created_at TIMESTAMP DEFAULT NOW (),
     updated_at TIMESTAMP DEFAULT NOW ()

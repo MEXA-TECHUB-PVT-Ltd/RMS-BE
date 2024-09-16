@@ -7,9 +7,14 @@ const {
 const { pagination } = require("../../utilities/pagination");
 const { responseSender } = require("../../utilities/responseHandlers");
 
+const generatePrNumber = async () => {
+  const prefix = "PR-";
+  const timestamp = new Date().getTime(); // Use timestamp to generate unique number
+  return `${prefix}${timestamp}`;
+};
+
 const createPurchaseRequisition = async (req, res, next) => {
   const {
-    pr_number,
     status,
     pr_detail,
     priority,
@@ -25,20 +30,8 @@ const createPurchaseRequisition = async (req, res, next) => {
   try {
     await pool.query(`BEGIN`);
 
-    const { rowCount: checkPrNumber } = await pool.query(
-      `SELECT * FROM purchase_requisition WHERE pr_number = $1`,
-      [pr_number]
-    );
-
-    if (checkPrNumber > 0) {
-      await pool.query(`ROLLBACK`);
-      return responseSender(
-        res,
-        400,
-        false,
-        "Purchase Requisition Number Already Exists"
-      );
-    }
+    // Generate pr_number automatically
+    const pr_number = await generatePrNumber();
 
     for (const item of JSON.parse(items)) {
       if (
@@ -93,7 +86,7 @@ const createPurchaseRequisition = async (req, res, next) => {
     const { rows, rowCount } = await pool.query(
       `INSERT INTO purchase_requisition (pr_number, status, pr_detail, priority, requested_by, requested_date, required_date, shipment_preferences, delivery_address , purchase_item_ids , document , total_amount) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9 , $10 , $11 , $12) RETURNING *`,
       [
-        pr_number,
+        pr_number, // Use generated pr_number
         status.toUpperCase(),
         pr_detail,
         priority.toUpperCase(),
@@ -155,7 +148,9 @@ const getPurchaseRequisition = async (req, res, next) => {
                           'id', v.id, 
                           'vendor_display_name', v.vendor_display_name,
                           'vendor_email', v.email,
-                          'vendor_phone_no', v.phone_no
+                          'vendor_phone_no', v.phone_no,
+                           'vendor_first_name', v.first_name,
+                            'vendor_last_name', v.last_name
                       )
                   )
                   FROM vendor v 
@@ -341,7 +336,22 @@ const updatePurchaseRequisition = async (req, res, next) => {
     const values = [];
     let index = 1;
 
-    if (pr_number) {
+    // Generate pr_number if not provided
+    let newPrNumber = pr_number;
+    if (!pr_number) {
+      // Generate the pr_number based on a predefined logic, e.g., PR-YYYYMMDD-XXX
+      const currentDate = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+      const { rows: prCountRows } = await pool.query(
+        `SELECT COUNT(*) FROM purchase_requisition WHERE requested_date = $1`,
+        [new Date().toISOString().slice(0, 10)]
+      );
+      const prCount = prCountRows[0].count || 0;
+      newPrNumber = `PR-${currentDate}-${String(Number(prCount) + 1).padStart(3, "0")}`;
+
+      fields.push(`pr_number = $${index}`);
+      values.push(newPrNumber);
+      index++;
+    } else {
       fields.push(`pr_number = $${index}`);
       values.push(pr_number);
       index++;
@@ -589,10 +599,74 @@ const deletePurchaseRequisition = async (req, res, next) => {
   }
 };
 
+const converToPO = async (req, res, next) => {
+  const { ids } = req.body;
+
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return responseSender(res, 400, false, 'Invalid input. Must provide an array of IDs.');
+  }
+
+  try {
+    const query = `
+      WITH accepted_reqs AS (
+        SELECT id
+        FROM purchase_requisition
+        WHERE id = ANY($1) AND status = 'ACCEPTED'
+      ),
+      updated_reqs AS (
+        UPDATE purchase_requisition
+        SET po_status = TRUE
+        WHERE id IN (SELECT id FROM accepted_reqs)
+        RETURNING id
+      )
+      SELECT id FROM purchase_requisition
+      WHERE id = ANY($1) AND status <> 'ACCEPTED';
+    `;
+
+    const result = await pool.query(query, [ids]);
+
+    // Extract updated IDs and non-accepted IDs from the result
+    const updatedIds = result.rows.filter(row => row.id).map(row => row.id);
+    const nonAcceptedIds = ids.filter(id => !updatedIds.includes(id));
+
+    if (updatedIds.length === 0) {
+      return responseSender(
+        res,
+        404,
+        false,
+        'No purchase requisitions were updated. All provided IDs may not have status ACCEPTED.',
+        nonAcceptedIds
+      );
+    }
+
+    let message = 'Purchase requisitions updated successfully.';
+    if (nonAcceptedIds.length > 0) {
+      message += ' Some provided IDs did not have a status of "ACCEPTED" and were not updated.';
+    }
+
+    return responseSender(
+      res,
+      200,
+      true,
+      message,
+      { updatedIds, nonAcceptedIds }
+    );
+  } catch (error) {
+    console.error('Error updating purchase requisitions:', error);
+    return responseSender(
+      res,
+      500,
+      false,
+      'Internal server error.'
+    );
+  }
+}
+
 module.exports = {
   createPurchaseRequisition,
   getPurchaseRequisition,
   deletePurchaseRequisition,
   getAllPurchaseRequisition,
   updatePurchaseRequisition,
+  converToPO
 };

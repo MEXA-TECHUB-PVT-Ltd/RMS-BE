@@ -2,7 +2,7 @@ const Joi = require("joi");
 
 const purchaseRequisitionShema = {
   createPurchaseRequisition: Joi.object({
-    pr_number: Joi.string().required(),
+    // pr_number: Joi.string().required(),
     status: Joi.string()
       .valid("ACCEPTED", "REJECTED", "DRAFT", "PENDING")
       .required(),
