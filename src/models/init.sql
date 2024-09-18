@@ -211,7 +211,7 @@ CREATE TABLE IF NOT EXISTS recipe_items (
     recipe_id UUID REFERENCES recipes(id) ON DELETE CASCADE,
     item_id UUID REFERENCES item(id),
     quantity TEXT,
-    measuring_unit VARCHAR(20),
+    measuring_unit TEXT,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -228,6 +228,9 @@ CREATE TABLE IF NOT EXISTS recipe_items (
     ), 
     UNIQUE(purchase_requisition_id)
 ); 
+
+-- ALTER TABLE purchase_order
+-- ADD COLUMN po_status BOOLEAN DEFAULT FALSE;
 
 CREATE TABLE IF NOT EXISTS purchase_order_preferred_vendors (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

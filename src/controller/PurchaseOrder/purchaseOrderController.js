@@ -3,6 +3,133 @@ const { v4: uuidv4 } = require('uuid');
 const { pagination } = require("../../utilities/pagination");
 const { responseSender } = require("../../utilities/responseHandlers");
 
+// const purchaseOrder = async (req, res, next) => {
+//     const perPage = Number.parseInt(req.query.perPage) || 10;
+//     const currentPage = Number.parseInt(req.query.currentPage) || 1;
+
+//     try {
+//         // Fetch records with status 'ACCEPTED' and po_status = true
+//         const { rows: requisitions } = await pool.query(
+//             `SELECT id, pr_number 
+//              FROM purchase_requisition 
+//              WHERE status = 'ACCEPTED' AND po_status = true`
+//         );
+
+//         // Check for records whose status changed from 'ACCEPTED'
+//         const { rows: changedRequisitions } = await pool.query(
+//             `SELECT po.purchase_requisition_id
+//             FROM purchase_order po                  
+//             JOIN purchase_requisition pr ON po.purchase_requisition_id = pr.id
+//             WHERE pr.status != 'ACCEPTED'`
+//         );
+
+//         // Delete records from purchase_order if their status changed from 'ACCEPTED'
+//         for (const requisition of changedRequisitions) {
+//             await pool.query(
+//                 `DELETE FROM purchase_order WHERE purchase_requisition_id = $1`,
+//                 [requisition.purchase_requisition_id]
+//             );
+//         }
+
+//         // Fetch the latest purchase requisitions if there are any
+//         if (requisitions.length > 0) {
+//             let newOrderCreated = false;
+//             const insertedPurchaseOrderIds = [];
+
+//             // Insert records into purchase_order table
+//             for (const requisition of requisitions) {
+//                 const purchaseOrderId = uuidv4(); // Ensure unique ID for purchase order
+//                 const purchaseOrderNumber = `PO-${Date.now()}`;
+
+//                 // Check if the purchase_requisition_id already exists in purchase_order table
+//                 const { rowCount } = await pool.query(
+//                     `SELECT 1 FROM purchase_order WHERE purchase_requisition_id = $1`,
+//                     [requisition.id]
+//                 );
+
+//                 if (rowCount === 0) {
+//                     await pool.query(
+//                         `INSERT INTO purchase_order (id, purchase_order_number, purchase_requisition_id)
+//                         VALUES ($1, $2, $3)`,
+//                         [purchaseOrderId, purchaseOrderNumber, requisition.id]
+//                     );
+//                     newOrderCreated = true;
+//                     insertedPurchaseOrderIds.push(purchaseOrderId);
+//                 }
+//             }
+//         }
+
+//         // Fetch total count of purchase orders with the relevant criteria
+//         const totalCountResult = await pool.query(
+//             `SELECT COUNT(*) FROM purchase_order po
+//              JOIN purchase_requisition pr ON po.purchase_requisition_id = pr.id
+//              WHERE pr.status = 'ACCEPTED' AND pr.po_status = true`
+//         );
+//         const totalItems = parseInt(totalCountResult.rows[0].count);
+//         const offset = (currentPage - 1) * perPage;
+
+//         // Fetch paginated purchase orders
+//         const { rows: allOrders } = await pool.query(
+//             `SELECT po.id as purchase_order_id, po.purchase_order_number, po.purchase_requisition_id, po.created_at, po.updated_at, pr.*
+//             FROM purchase_order po
+//             JOIN purchase_requisition pr ON po.purchase_requisition_id = pr.id
+//             WHERE pr.status = 'ACCEPTED' AND pr.po_status = true
+//             LIMIT $1 OFFSET $2`,
+//             [perPage, offset]
+//         );
+
+//         // Fetch purchase items for each order
+//         for (const order of allOrders) {
+//             const { rows: purchaseItems } = await pool.query(
+//                 `SELECT * FROM purchase_items WHERE id = ANY($1::uuid[])`,
+//                 [order.purchase_item_ids]
+//             );
+
+//             // Fetch vendor details for each purchase item
+//             for (const item of purchaseItems) {
+//                 const { rows: vendors } = await pool.query(
+//                     `SELECT * FROM vendor WHERE id = ANY($1::uuid[])`,
+//                     [item.preferred_vendor_ids]
+//                 );
+//                 item.preferred_vendors = vendors;
+//             }
+
+//             order.purchase_items = purchaseItems;
+//         }
+
+//         // Store preferred vendors
+//         await storePreferredVendors(allOrders);
+
+//         const paginationInfo = pagination(totalItems, perPage, currentPage);
+
+//         return responseSender(res, 200, true, "Purchase orders fetched", { count: totalItems, orders: allOrders });
+
+//     } catch (error) {
+//         next(error);
+//     }
+// };
+
+// // Function to store preferred vendors
+// const storePreferredVendors = async (orders) => {
+//     try {
+//         for (const order of orders) {
+//             for (const item of order.purchase_items) {
+//                 for (const vendor of item.preferred_vendors) {
+//                     await pool.query(
+//                         `INSERT INTO purchase_order_preferred_vendors (purchase_order_id, purchase_item_id, vendor_id)
+//                         VALUES ($1, $2, $3)
+//                         ON CONFLICT (purchase_order_id, purchase_item_id, vendor_id) DO NOTHING`,
+//                         [order.purchase_order_id, item.id, vendor.id]
+//                     );
+//                 }
+//             }
+//         }
+//     } catch (error) {
+//         console.error('Error storing preferred vendors:', error);
+//         throw error; // Re-throw the error to be caught by the main function
+//     }
+// };
+
 const purchaseOrder = async (req, res, next) => {
     const perPage = Number.parseInt(req.query.perPage) || 10;
     const currentPage = Number.parseInt(req.query.currentPage) || 1;
@@ -10,8 +137,10 @@ const purchaseOrder = async (req, res, next) => {
     try {
         // Fetch records with status 'ACCEPTED'
         const { rows: requisitions } = await pool.query(
-            `SELECT id, pr_number FROM purchase_requisition WHERE status = 'ACCEPTED'`
-        );
+                        `SELECT id, pr_number 
+                         FROM purchase_requisition 
+                         WHERE status = 'ACCEPTED' AND po_status = true`
+                    );
 
         // Check for records whose status changed from 'ACCEPTED'
         const { rows: changedRequisitions } = await pool.query(
