@@ -69,7 +69,7 @@ const createInvoice = async (req, res, next) => {
                 created_at, 
                 updated_at
             ) VALUES (
-                $1, $2, $3, $4, $5, $6, $7, $8, 'Draft', $9, NOW(), NOW()
+                $1, $2, $3, $4, $5, $6, $7, $8, 'Unpaid', $9, NOW(), NOW()
             ) RETURNING *`,
             [
                 uuidv4(),

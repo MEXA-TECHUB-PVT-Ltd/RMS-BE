@@ -20,7 +20,7 @@ const createRecipe = async (req, res, next) => {
         preparation_instructions,
         serving_details,
         signature,
-        items // Array of objects with { item_id, quantity }
+        items // Array of objects with { item_id, quantity, measuring_unit }
     } = req.body;
 
     // Validate required fields
@@ -65,9 +65,9 @@ const createRecipe = async (req, res, next) => {
         // Array to store details of items added to the recipe
         const addedItems = [];
 
-        // Loop through each item and fetch the measuring_unit if not provided
+        // Loop through each item, and use the measuring_unit provided by the user
         for (const item of items) {
-            const { item_id, quantity } = item;
+            const { item_id, quantity, measuring_unit } = item;
 
             // Fetch the complete item details from the item table
             const itemResult = await pool.query(
@@ -81,24 +81,11 @@ const createRecipe = async (req, res, next) => {
 
             const itemDetails = itemResult.rows[0];
 
-            let { usage_unit, name, description, type, product_category, unit_category, quantity_units, product_units, product_catalog, stock_in_hand, opening_stock_rate, reorder_unit, inventory_description, image: itemImage } = itemDetails;
+            let { name, description, type, product_category, unit_category, quantity_units, product_units, product_catalog, stock_in_hand, opening_stock_rate, reorder_unit, inventory_description, image: itemImage } = itemDetails;
 
-            // Check if the usage_unit is a UUID (for units table lookup) or a direct string value
-            const isUUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[4|5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(usage_unit);
-            let measuring_unit;
-
-            if (isUUID) {
-                // Fetch the unit name from the units table if usage_unit is a UUID
-                const unitResult = await pool.query('SELECT unit FROM units WHERE id = $1', [usage_unit]);
-
-                if (unitResult.rows.length === 0) {
-                    return responseSender(res, 404, false, "Unit not found for the selected item");
-                }
-
-                measuring_unit = unitResult.rows[0].unit; // Use the unit name from the units table
-            } else {
-                // If usage_unit is not a UUID, use the stored data directly
-                measuring_unit = usage_unit;
+            // No need to fetch the measuring unit from the database, as it's provided by the user now
+            if (!measuring_unit) {
+                return responseSender(res, 422, false, "Measuring unit is required for each item.");
             }
 
             // Insert the item, quantity, and measuring unit into the recipe_items table
@@ -352,6 +339,20 @@ const specificRecipe = async (req, res, next) => {
         // Format the result to include selected_item as a separate object and aggregate items
         const recipeMap = new Map();
 
+        // Fetch units from the database only once for optimization if needed
+        const unitIds = result.rows
+            .map(row => row.measuring_unit)
+            .filter(measuring_unit => /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[4|5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(measuring_unit)); // Filter only UUIDs
+
+        let unitMapping = {};
+        if (unitIds.length) {
+            const unitResults = await pool.query('SELECT id, unit FROM units WHERE id = ANY($1::uuid[])', [unitIds]);
+            unitMapping = unitResults.rows.reduce((acc, unit) => {
+                acc[unit.id] = unit.unit;
+                return acc;
+            }, {});
+        }
+
         result.rows.forEach(row => {
             const recipeId = row.recipe_id;
 
@@ -379,14 +380,21 @@ const specificRecipe = async (req, res, next) => {
             }
 
             if (row.item_id) {
+                let measuring_unit = row.measuring_unit;
+
+                // If the measuring_unit is a UUID, map it to the unit name
+                if (unitMapping[measuring_unit]) {
+                    measuring_unit = unitMapping[measuring_unit];
+                }
+
                 recipeMap.get(recipeId).items.push({
                     item_id: row.item_id,
                     name: row.item_name,
                     image: row.item_image,
                     description: row.item_description,
                     quantity: row.quantity,
-                    type:row.type,
-                    measuring_unit: row.measuring_unit
+                    type: row.type,
+                    measuring_unit: measuring_unit  // Display either unit name or number directly
                 });
             }
         });

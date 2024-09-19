@@ -600,67 +600,59 @@ const deletePurchaseRequisition = async (req, res, next) => {
 };
 
 const converToPO = async (req, res, next) => {
-  const { ids } = req.body;
+  const { purchaseRequisitionIds } = req.body; // Expecting an array of IDs in the request body
 
-  if (!Array.isArray(ids) || ids.length === 0) {
-    return responseSender(res, 400, false, 'Invalid input. Must provide an array of IDs.');
+  if (!Array.isArray(purchaseRequisitionIds) || purchaseRequisitionIds.length === 0) {
+    return responseSender(res, 404, false, "Empty purchase requisition IDs array");
   }
 
   try {
-    const query = `
-      WITH accepted_reqs AS (
-        SELECT id
-        FROM purchase_requisition
-        WHERE id = ANY($1) AND status = 'ACCEPTED'
-      ),
-      updated_reqs AS (
-        UPDATE purchase_requisition
-        SET po_status = TRUE
-        WHERE id IN (SELECT id FROM accepted_reqs)
-        RETURNING id
-      )
-      SELECT id FROM purchase_requisition
-      WHERE id = ANY($1) AND status <> 'ACCEPTED';
-    `;
+    // Query to update po_status for 'ACCEPTED' requisitions
+    const updateResult = await pool.query(
+      `UPDATE purchase_requisition 
+       SET po_status = TRUE, updated_at = NOW()
+       WHERE id = ANY($1) AND status = 'ACCEPTED'
+       RETURNING id, status`,
+      [purchaseRequisitionIds]
+    );
 
-    const result = await pool.query(query, [ids]);
+    const updatedRows = updateResult.rows;
+    const updatedIds = updatedRows.map(row => row.id); // Get updated IDs
 
-    // Extract updated IDs and non-accepted IDs from the result
-    const updatedIds = result.rows.filter(row => row.id).map(row => row.id);
-    const nonAcceptedIds = ids.filter(id => !updatedIds.includes(id));
+    // Query to get the requisitions that were NOT updated (status != 'ACCEPTED')
+    const nonUpdatedResult = await pool.query(
+      `SELECT id, status 
+       FROM purchase_requisition 
+       WHERE id = ANY($1) AND status != 'ACCEPTED'`,
+      [purchaseRequisitionIds]
+    );
 
-    if (updatedIds.length === 0) {
-      return responseSender(
-        res,
-        404,
-        false,
-        'No purchase requisitions were updated. All provided IDs may not have status ACCEPTED.',
-        nonAcceptedIds
-      );
+    const nonUpdatedRows = nonUpdatedResult.rows;
+    const nonUpdatedIds = nonUpdatedRows.map(row => row.id); // Get non-updated IDs
+
+    // If no requisitions were updated
+    if (updatedRows.length === 0) {
+      return responseSender(res, 422, false, "No purchase requisitions were updated. Ensure that the provided requisitions have a status of 'ACCEPTED'.", {
+        updatedIds: [],
+        nonUpdatedIds
+      });
     }
 
-    let message = 'Purchase requisitions updated successfully.';
-    if (nonAcceptedIds.length > 0) {
-      message += ' Some provided IDs did not have a status of "ACCEPTED" and were not updated.';
-    }
-
+    // Return both updated and non-updated IDs in the response
     return responseSender(
       res,
       200,
       true,
-      message,
-      { updatedIds, nonAcceptedIds }
+      "Purchase requisition converted to PO successfully",
+      {
+        updatedIds,
+        nonUpdatedIds
+      }
     );
   } catch (error) {
-    console.error('Error updating purchase requisitions:', error);
-    return responseSender(
-      res,
-      500,
-      false,
-      'Internal server error.'
-    );
+    next(error);
   }
-}
+};
 
 module.exports = {
   createPurchaseRequisition,
