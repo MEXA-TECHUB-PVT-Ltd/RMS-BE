@@ -2,7 +2,7 @@ const { cloudinary } = require("../../config/cloudinary/index");
 
 // upload to cloudinary
 const uploadToCloudinary = async (path, folder) => {
-  try { 
+  try {
 
     const uploadResult = await cloudinary.uploader.upload(path, {
       folder: `RMS/${folder}`,
