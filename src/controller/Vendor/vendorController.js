@@ -150,13 +150,14 @@ const getVendors = async (req, res, next) => {
       limit,
       sortField,
       sortOrder,
-      search,
-      first_name,
-      last_name,
-      vendor_display_name,
-      company_name,
-      payment_term_id,
+      search_first_name,
+      search_last_name,
+      search_vendor_display_name,
+      search_company_name,
+      payment_term_name, // Already present
+      provider_type, // Added provider_type filter 
     } = req.query;
+
     page = parseInt(page, 10) || 1;
     limit = parseInt(limit, 10) || 100;
     sortField = sortField || "created_at";
@@ -166,44 +167,56 @@ const getVendors = async (req, res, next) => {
     let queryParams = [];
     let whereClauses = [];
 
-    if (search) {
+    // Search separately by each field
+    if (search_first_name) {
       whereClauses.push(
-        `(company_name ILIKE $${queryParams.length + 1
-        } OR vendor_display_name ILIKE $${queryParams.length + 1
-        } OR first_name ILIKE $${queryParams.length + 1})`
+        `LOWER(first_name) LIKE LOWER($${queryParams.length + 1})`
       );
-      queryParams.push(`%${search}%`);
+      queryParams.push(`%${search_first_name}%`);
     }
 
-    if (first_name) {
+    if (search_last_name) {
       whereClauses.push(
-        `LOWER(first_name) = LOWER($${queryParams.length + 1})`
+        `LOWER(last_name) LIKE LOWER($${queryParams.length + 1})`
       );
-      queryParams.push(first_name);
+      queryParams.push(`%${search_last_name}%`);
     }
 
-    if (last_name) {
-      whereClauses.push(`LOWER(last_name) = LOWER($${queryParams.length + 1})`);
-      queryParams.push(last_name);
-    }
-
-    if (vendor_display_name) {
+    if (search_vendor_display_name) {
       whereClauses.push(
-        `LOWER(vendor_display_name) = LOWER($${queryParams.length + 1})`
+        `LOWER(vendor_display_name) LIKE LOWER($${queryParams.length + 1})`
       );
-      queryParams.push(vendor_display_name);
+      queryParams.push(`%${search_vendor_display_name}%`);
     }
 
-    if (company_name) {
+    if (search_company_name) {
       whereClauses.push(
-        `LOWER(company_name) = LOWER($${queryParams.length + 1})`
+        `LOWER(company_name) LIKE LOWER($${queryParams.length + 1})`
       );
-      queryParams.push(company_name);
+      queryParams.push(`%${search_company_name}%`);
     }
 
-    if (payment_term_id) {
-      whereClauses.push(`payment_term_id = $${queryParams.length + 1}`);
-      queryParams.push(payment_term_id);
+    if (payment_term_name) {
+      whereClauses.push(
+        `LOWER(p.payment_term_name) LIKE LOWER($${queryParams.length + 1})`
+      );
+      queryParams.push(`%${payment_term_name}%`);
+    }
+
+    // Add filter for provider_type
+    if (provider_type) {
+      whereClauses.push(
+        `LOWER(provider_type) = LOWER($${queryParams.length + 1})`
+      );
+      queryParams.push(provider_type);
+    }
+
+    // Add another filter for company_name (if different from search_company_name)
+    if (search_company_name) {
+      whereClauses.push(
+        `LOWER(company_name) LIKE LOWER($${queryParams.length + 1})`
+      );
+      queryParams.push(`%${search_company_name}%`);
     }
 
     let whereClause =
@@ -229,12 +242,13 @@ const getVendors = async (req, res, next) => {
     const countQuery = `
       SELECT COUNT(*)
       FROM vendor v
+      LEFT JOIN payment_term p ON v.payment_term_id = p.id
       ${whereClause}
     `;
     const totalRowsResult = await pool.query(
       countQuery,
-      queryParams.slice(0, -2)
-    ); // Pass only the filter parameters for the count query
+      queryParams.slice(0, -2) // Pass only the filter parameters for the count query
+    );
 
     return responseSender(res, 200, true, "Vendors Retrieved", {
       vendors: rows,
@@ -243,7 +257,7 @@ const getVendors = async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-};
+}; 
 
 const updateVendor = async (req, res, next) => {
   const { id } = req.params;

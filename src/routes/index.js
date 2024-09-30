@@ -32,6 +32,6 @@ router.use("/comment", commentsRoutes);
 router.use("/coupon", couponRoutes);
 router.use("/purchase/receives", purchaseReceivesRoutes);
 router.use("/tax", TaxRoutes);
-router.use("/invoice", invoiceRoutes);
+router.use("/invoice", invoiceRoutes); 
 
 module.exports = router;

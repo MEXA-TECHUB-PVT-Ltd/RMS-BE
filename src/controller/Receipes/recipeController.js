@@ -381,10 +381,13 @@ const specificRecipe = async (req, res, next) => {
 
             if (row.item_id) {
                 let measuring_unit = row.measuring_unit;
+                let measuring_unit_name = measuring_unit; // Default is the measuring unit value, which can be a number or a UUID
+                let measuring_unit_id = null;
 
-                // If the measuring_unit is a UUID, map it to the unit name
+                // If the measuring_unit is a UUID, map it to the unit name and store the ID
                 if (unitMapping[measuring_unit]) {
-                    measuring_unit = unitMapping[measuring_unit];
+                    measuring_unit_name = unitMapping[measuring_unit];  // Get the unit name from the mapping
+                    measuring_unit_id = measuring_unit;  // Keep the original UUID as the ID
                 }
 
                 recipeMap.get(recipeId).items.push({
@@ -394,7 +397,8 @@ const specificRecipe = async (req, res, next) => {
                     description: row.item_description,
                     quantity: row.quantity,
                     type: row.type,
-                    measuring_unit: measuring_unit  // Display either unit name or number directly
+                    measuring_unit: measuring_unit_name,  // Display either unit name or number directly
+                    measuring_unit_id: measuring_unit_id  // Add the measuring unit ID to the item
                 });
             }
         });
@@ -425,7 +429,7 @@ const updateRecipe = async (req, res, next) => {
         preparation_instructions,
         serving_details,
         signature,
-        items // Array of objects with { item_id, quantity }
+        items // Array of objects with { item_id, quantity, measuring_unit }
     } = req.body;
 
     // Check if recipe_id is provided
@@ -525,34 +529,11 @@ const updateRecipe = async (req, res, next) => {
 
             // Insert new items into the recipe_items table
             for (const item of items) {
-                const { item_id, quantity } = item;
+                const { item_id, quantity, measuring_unit } = item;
 
-                // Fetch the complete item details from the item table
-                const itemResult = await pool.query('SELECT * FROM item WHERE id = $1', [item_id]);
-
-                if (itemResult.rows.length === 0) {
-                    return responseSender(res, 404, false, "Item not found");
-                }
-
-                const itemDetails = itemResult.rows[0];
-                const { usage_unit } = itemDetails;
-
-                // Check if the usage_unit is a UUID (for units table lookup) or a direct string value
-                const isUUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[4|5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(usage_unit);
-                let measuring_unit;
-
-                if (isUUID) {
-                    // Fetch the unit name from the units table if usage_unit is a UUID
-                    const unitResult = await pool.query('SELECT unit FROM units WHERE id = $1', [usage_unit]);
-
-                    if (unitResult.rows.length === 0) {
-                        return responseSender(res, 404, false, "Unit not found for the selected item");
-                    }
-
-                    measuring_unit = unitResult.rows[0].unit; // Use the unit name from the units table
-                } else {
-                    // If usage_unit is not a UUID, use the stored data directly
-                    measuring_unit = usage_unit;
+                // Ensure that measuring_unit is provided
+                if (!measuring_unit) {
+                    return responseSender(res, 422, false, "Measuring unit is required for each item.");
                 }
 
                 // Insert the item, quantity, and measuring unit into the recipe_items table

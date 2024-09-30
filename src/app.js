@@ -13,6 +13,46 @@ const router = require("./routes/index.js");
 // create express app
 const app = express();
 
+const fs = require('fs');
+const multer = require('multer');
+const cloudinary = require("cloudinary").v2;
+
+cloudinary.config({
+  cloud_name: process.env.CLOUD_NAME,
+  api_key: process.env.API_KEY,
+  api_secret: process.env.API_SECRET,
+  secure: true,
+});
+
+const upload = multer({ dest: 'uploads/' }); // temp storage before upload to Cloudinary
+
+// Endpoint for uploading the file
+app.post('/upload', upload.single('file'), async (req, res) => {
+  try {
+    const file = req.file;
+
+    // Upload the file to Cloudinary
+    const result = await cloudinary.uploader.upload(file.path, {
+      resource_type: 'auto', // Auto-detects the type of file (image, video, etc.)
+      access_mode: 'public'
+    });
+
+    console.log("result", result);
+
+    // Remove the file from the server after uploading to Cloudinary
+    fs.unlinkSync(file.path);
+
+    // Return the URL
+    res.json({
+      success: true,
+      url: result.secure_url, // This is the file URL in Cloudinary
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'File upload failed' });
+  }
+});
+
 // middlewares
 if (process.env.NODE_ENV !== "production") {
   app.use(morgan("dev")); // For consoling API request and other info
