@@ -84,6 +84,7 @@ const itemList = async (req, res, next) => {
     const searchCategory = req.query.product_category || '';
     const searchVendorName = req.query.vendor_name || '';
     const searchProductCatalog = req.query.product_catalog || '';
+    const searchType = req.query.type || ''; // New search parameter for type
 
     try {
         // Construct the base query
@@ -104,8 +105,8 @@ const itemList = async (req, res, next) => {
                 i.image, 
                 pc.name AS product_category,
                 i.quantity_units,
-                i.product_units, -- Updated this to TEXT
-                i.usage_unit, -- Updated this to TEXT
+                i.product_units,
+                i.usage_unit,
                 i.stock_in_hand,
                 i.opening_stock_rate,
                 i.reorder_unit,
@@ -118,7 +119,7 @@ const itemList = async (req, res, next) => {
             LEFT JOIN item_preferred_vendor ipv ON i.id = ipv.item_id
             LEFT JOIN vendor v ON ipv.vendor_id = v.id`;
 
-        // Add search conditions if name, product_category, vendor_name, or product_catalog are provided
+        // Add search conditions if name, product_category, vendor_name, product_catalog, or type are provided
         let queryParams = [];
         let whereClauses = [];
 
@@ -140,6 +141,11 @@ const itemList = async (req, res, next) => {
         if (searchProductCatalog) {
             whereClauses.push(`i.product_catalog = $${queryParams.length + 1}`);
             queryParams.push(searchProductCatalog);
+        }
+
+        if (searchType) { // Add search condition for type
+            whereClauses.push(`i.type ILIKE $${queryParams.length + 1}`);
+            queryParams.push(`%${searchType}%`);
         }
 
         if (whereClauses.length > 0) {
